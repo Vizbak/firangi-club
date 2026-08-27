@@ -109,7 +109,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .profileAvatar{width:175px;height:210px;background:#e1d9cc;display:grid;place-items:center}
 .profileAvatar .emblem svg{width:105px;height:105px;stroke:var(--ink);stroke-width:1.15}
 @media(max-width:1000px){.clubGrid{grid-template-columns:1fr 1fr}.profileColumn{grid-column:1/-1;height:220px}.profileCard{height:190px}.profileMark{display:none}}
-@media(max-width:700px){html,body{overflow:auto}.cursor,.cursorDot{display:none}.navRight{display:none}.hero h1{font-size:64px}.about{grid-template-columns:1fr;gap:35px;padding:35px 0}.clubPage{height:auto;min-height:100%;padding:20px 14px}.clubGrid{grid-template-columns:minmax(0,1fr);padding-bottom:70px;gap:28px}.profileColumn{grid-column:auto;height:auto}.profileCard{height:auto;min-height:260px}.board{height:560px;width:100%;overflow:hidden}.note{width:30%;min-height:72px;font-size:7px;padding:8px}.memberSticker{width:30%;min-height:72px}.directory{grid-template-columns:1fr}.profileModalGrid{grid-template-columns:1fr}}
+@media(max-width:700px){html,body{overflow:hidden}.page#club{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}.page#club .clubPage{height:auto;min-height:100%;overflow:visible;padding-bottom:30px}.page#club .clubGrid{height:auto;min-height:0;grid-template-columns:minmax(0,1fr);gap:28px;margin-top:25px}.page#club .clubColumn{height:auto}.page#club .board{height:560px;min-height:560px}.cursor,.cursorDot{display:none}.navRight{display:none}.hero h1{font-size:64px}.about{grid-template-columns:1fr;gap:35px;padding:35px 0}.clubPage{height:auto;min-height:100%;padding:20px 14px}.clubGrid{grid-template-columns:minmax(0,1fr);padding-bottom:70px;gap:28px}.profileColumn{grid-column:auto;height:auto}.profileCard{height:auto;min-height:260px}.board{height:560px;width:100%;overflow:hidden}.note{width:30%;min-height:72px;font-size:7px;padding:8px}.memberSticker{width:30%;min-height:72px}.directory{grid-template-columns:1fr}.profileModalGrid{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.page.entering,.page.leaving,.entering .depth-a,.entering .depth-b,.entering .depth-c,.entering .depth-d{animation:none!important}}
 </style>
 </head>
@@ -260,8 +260,16 @@ async function loadRemoteData(){
 }
 async function saveCreator(m){
  if(!db)return null;
+ const fingerprint=[m.name.toLowerCase().trim(),(m.social||"").toLowerCase().trim(),(m.bio||"").toLowerCase().trim(),(m.categories||[]).slice().sort().join(",")].join("|");
+ try{
+  const existingFingerprint=localStorage.getItem("firangi_registration_fingerprint");
+  const existingId=localStorage.getItem("firangi_registration_id");
+  if(existingFingerprint===fingerprint && existingId)return {id:existingId,...m};
+ }catch(e){}
  const {data,error}=await db.from("creators").insert({name:m.name,categories:m.categories,bio:m.bio||"",social:m.social||""}).select().single();
- if(error){console.warn(error);return null} return data;
+ if(error){console.warn(error);return null}
+ try{localStorage.setItem("firangi_registration_fingerprint",fingerprint);if(data&&data.id)localStorage.setItem("firangi_registration_id",data.id)}catch(e){}
+ return data;
 }
 async function saveJob(title,meta,details){
  if(!db)return null;
@@ -308,14 +316,26 @@ if(joinButton){
   });
 }
 
+let registrationSubmitting=false;
 $("#aboutForm").addEventListener("submit",async e=>{
 e.preventDefault();
+if(registrationSubmitting||state.member)return;
 const categories=$$('input[name="category"]:checked').map(x=>x.value);
 if(!$("#name").value.trim()){ $("#name").focus();return }
 if(!categories.length){alert("Choose at least one creative category.");return}
+const submitButton=$("#aboutForm .enter");
+registrationSubmitting=true;
+if(submitButton){submitButton.disabled=true;submitButton.textContent="ENTERING…";submitButton.style.opacity=".65"}
 const member={name:$("#name").value.trim(),categories,social:$("#social").value.trim(),bio:$("#bio").value.trim()||"New Firangi Club member.",icon:iconFor(categories)};
+const saved=await saveCreator(member);
+if(!saved){
+ registrationSubmitting=false;
+ if(submitButton){submitButton.disabled=false;submitButton.textContent="LET ME IN →";submitButton.style.opacity="1"}
+ alert("We couldn't save your registration. Please try again.");
+ return;
+}
 state.member=member;
- const saved=await saveCreator(member); if(saved)member.id=saved.id;
+member.id=saved.id;
 const i=state.members.findIndex(m=>m.name.toLowerCase()===member.name.toLowerCase());
 if(i>=0)state.members[i]=member;else state.members.unshift(member);
 renderDirectory("all");renderProfile();renderMemberNotes();
