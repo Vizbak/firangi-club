@@ -113,7 +113,17 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 @media(prefers-reduced-motion:reduce){.page.entering,.page.leaving,.entering .depth-a,.entering .depth-b,.entering .depth-c,.entering .depth-d{animation:none!important}}
 </style>
 </head>
-<body>
+<body><script>
+window.FirangiGoAbout=function(){
+  var home=document.getElementById("home"), about=document.getElementById("about");
+  if(!home||!about)return;
+  try{
+    if(typeof movePage==="function"){movePage("home","about");return;}
+  }catch(e){}
+  home.classList.remove("active");
+  about.classList.add("active");
+};
+</script>
 <div class="cursor"></div><div class="cursorDot"></div>
 
 <section id="home" class="page active">
@@ -123,7 +133,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 <div class="micro depth-a">A CLUB FOR PEOPLE WHO MAKE THINGS.</div>
 <h1 class="depth-b">JOIN THE<span>FIRANGI CLUB.</span></h1>
 <div class="heroSub depth-c"><i></i><div class="micro">creators · artists · misfits</div></div>
-<button id="joinButton" class="join depth-d" type="button">JOIN THE CLUB →</button>
+<button id="joinButton" class="join depth-d" type="button" onclick="if(window.FirangiGoAbout){window.FirangiGoAbout();}">JOIN THE CLUB →</button>
 </div>
 <div class="footer micro"><span>EST. DELHI</span><span>COME IN. STAY A WHILE.</span></div>
 </div>
@@ -229,9 +239,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
 const SUPABASE_URL='https://yhdhoqtibqqrocsbvoth.supabase.co';
 const SUPABASE_KEY='sb_publishable_7rqGyn_z2UqkS6Vzk0s7YA_52Ldru-i';
-const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let db=null;
+try{
+  if(window.supabase && window.supabase.createClient){
+    db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  }
+}catch(err){console.warn("Supabase unavailable:",err)}
 
 async function loadRemoteData(){
+ if(!db)return;
  try{
   const [cr,jb]=await Promise.all([
    db.from("creators").select("*").order("created_at",{ascending:true}),
@@ -243,10 +259,12 @@ async function loadRemoteData(){
  }catch(e){console.warn(e)}
 }
 async function saveCreator(m){
+ if(!db)return null;
  const {data,error}=await db.from("creators").insert({name:m.name,categories:m.categories,bio:m.bio||"",social:m.social||""}).select().single();
  if(error){console.warn(error);return null} return data;
 }
 async function saveJob(title,meta,details){
+ if(!db)return null;
  const {data,error}=await db.from("jobs").insert({title,meta,details,posted_by:state.member?.name||"Firangi Club member"}).select().single();
  if(error){console.warn(error);return null} return data;
 }
@@ -392,11 +410,11 @@ $$(".message").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();ale
 renderJobs();
  setTimeout(loadRemoteData,0);
 $("#cancelJob").addEventListener("click",()=>{$("#addJobForm").hidden=true;$("#jobTitle").value="";$("#jobMeta").value="";$("#jobDetails").value="";$("#jobStatus").textContent=""});
-$("#submitJob").addEventListener("click",()=>{
+$("#submitJob").addEventListener("click",async ()=>{
 const title=$("#jobTitle").value.trim(),meta=$("#jobMeta").value.trim()||"JUST POSTED · DELHI",details=$("#jobDetails").value.trim();
 if(!title){$("#jobStatus").textContent="Add a title for the requirement.";$("#jobTitle").focus();return}
 if(!details){$("#jobStatus").textContent="Add a short description.";$("#jobDetails").focus();return}
-await saveJob(title,meta,details);state.jobs.unshift([title,meta,details]);renderJobs();
+const savedJob=await saveJob(title,meta,details); if(savedJob) state.jobs.unshift([savedJob.title,savedJob.meta||meta,savedJob.details||details]); else state.jobs.unshift([title,meta,details]); renderJobs();
 $("#addJobForm").hidden=true;$("#jobTitle").value="";$("#jobMeta").value="";$("#jobDetails").value="";
 });
 
